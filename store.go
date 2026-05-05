@@ -52,6 +52,16 @@ func newJSONLStore(path string) (AuditStore, error) {
 	if err := f.Close(); err != nil {
 		return nil, err
 	}
+	// Verify or restore 0600 — protects against umask drift and manual changes.
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("writ: stat chain file: %w", err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return nil, fmt.Errorf("writ: chain file has insecure permissions (%#o) and chmod failed: %w", fi.Mode().Perm(), err)
+		}
+	}
 	return &jsonlStore{path: path}, nil
 }
 

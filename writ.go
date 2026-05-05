@@ -48,6 +48,11 @@ type Config struct {
 	// fails Merkle verification. A ChainSegmentBoundary entry is written
 	// recording the recovery event. Default false: corrupt chain → ErrCorruptChain.
 	AllowCorruptChainRecovery bool
+
+	// AllowedCallers restricts which CallerID values may open a writ.Client
+	// that writes to this chain. Nil or empty allows any CallerID.
+	// writ.New returns an error if CallerID is not in the list when it is set.
+	AllowedCallers []string
 }
 
 // ErrCorruptChain is returned by New() when the existing chain fails Merkle
@@ -75,6 +80,19 @@ func New(cfg Config) (*Client, error) {
 func NewWithContext(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.PolicyPath == "" {
 		return nil, fmt.Errorf("writ: Config.PolicyPath is required")
+	}
+
+	if len(cfg.AllowedCallers) > 0 {
+		permitted := false
+		for _, id := range cfg.AllowedCallers {
+			if id == cfg.CallerID {
+				permitted = true
+				break
+			}
+		}
+		if !permitted {
+			return nil, fmt.Errorf("writ: caller %q not in AllowedCallers", cfg.CallerID)
+		}
 	}
 
 	var store AuditStore
@@ -200,6 +218,19 @@ func (c *Client) Audit(event AuditEvent) error {
 		return fmt.Errorf("writ.Audit: build entry: %w", err)
 	}
 	return c.chain.Append(entry)
+}
+
+// ChainProtected attempts to set the FS_APPEND_FL attribute (equivalent to
+// chattr +a) on the chain file, preventing in-place overwrites at the
+// filesystem level. Returns true if the flag is set or was successfully
+// applied. Returns false if no AuditPath is configured, the filesystem does
+// not support the attribute, or the process lacks sufficient privilege.
+// On non-Linux platforms this always returns false.
+func (c *Client) ChainProtected() bool {
+	if c.cfg.AuditPath == "" {
+		return false
+	}
+	return trySetAppendOnly(c.cfg.AuditPath)
 }
 
 // Verify reads the chain at chainPath and verifies the Merkle hash links.
