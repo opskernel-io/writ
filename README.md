@@ -122,7 +122,15 @@ err = writ.Verify("/var/writ/audit.chain")
 
 v0 targets **Go agents that call `anthropic.Client` directly** — any agent built with `github.com/anthropics/anthropic-sdk-go`. Drop `writ.New()` in at the client construction site.
 
-Agents that proxy the Anthropic API through their own server (rather than calling the SDK directly from your Go process) require an alternative integration path. Integration guides for specific agents are on the roadmap.
+| Agent | v0 support | Notes |
+|---|---|---|
+| Custom Go agent (anthropic-sdk-go) | **✓ Supported** | `writ.New()` wraps at construction time — one line |
+| Cursor | Roadmap | Cursor proxies all LLM calls through its own servers; requires HTTP middleware path (ADR #20) |
+| Devin | Not planned | Cognition cloud-only; no user-controlled process to intercept |
+
+**Cursor:** writ cannot intercept at the SDK level because Cursor routes every LLM call through Cursor's backend regardless of your API key. The roadmap item (ADR #20) is a local HTTP proxy that Cursor can be configured to route through via its OpenAI-compatible base-URL override. Not yet implemented.
+
+**Devin:** Devin is a fully cloud-hosted system. There is no user-controlled process making LLM calls — Cognition's infrastructure handles all inference. writ integration is not viable without a Cognition self-hosted tier.
 
 ---
 
