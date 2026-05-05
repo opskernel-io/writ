@@ -1,0 +1,5 @@
+/writ
+/dist/
+*.audit.jsonl
+*.test
+coverage.out
