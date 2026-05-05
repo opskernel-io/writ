@@ -26,6 +26,7 @@ type ChainEntry struct {
 	ActionType   string            `json:"action_type,omitempty"`
 	Actor        string            `json:"actor,omitempty"`
 	CallerID     string            `json:"caller_id,omitempty"`
+	SessionID    string            `json:"session_id,omitempty"`
 	InputHash    string            `json:"input_hash,omitempty"`
 	OutputHash   string            `json:"output_hash,omitempty"`
 	Result       string            `json:"result,omitempty"`

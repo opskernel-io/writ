@@ -48,6 +48,7 @@ func (g *gateWrapper) evaluate(ctx context.Context, params anthropic.MessageNewP
 		ID:           auditID,
 		EventType:    "llm_call",
 		CallerID:     cfg.CallerID,
+		SessionID:    cfg.SessionID,
 		HookdTraceID: cfg.HookdTraceID,
 		Allowed:      result.Allowed,
 		DenialReason: result.DenialReason,

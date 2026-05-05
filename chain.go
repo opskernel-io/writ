@@ -15,7 +15,7 @@ func newAuditID() string {
 
 // buildChainEntry creates a Merkle-linked ChainEntry from an AuditEvent.
 // Reads the last entry from store to get the previous hash.
-func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID string) (ChainEntry, error) {
+func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID, sessionID string) (ChainEntry, error) {
 	prev, err := lastHash(store)
 	if err != nil {
 		return ChainEntry{}, err
@@ -52,6 +52,7 @@ func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID 
 		ActionType:   event.ActionType,
 		Actor:        actor,
 		CallerID:     event.CallerID,
+		SessionID:    sessionID,
 		InputHash:    event.InputHash,
 		OutputHash:   event.OutputHash,
 		Result:       result,
@@ -75,6 +76,7 @@ func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID 
 		ActionType:   internal.ActionType,
 		Actor:        internal.Actor,
 		CallerID:     internal.CallerID,
+		SessionID:    internal.SessionID,
 		InputHash:    internal.InputHash,
 		OutputHash:   internal.OutputHash,
 		Result:       internal.Result,
@@ -107,6 +109,7 @@ func buildPostCallEntry(store AuditStore, preEntry ChainEntry, resp *anthropic.M
 		PrevHash:     prev,
 		EventType:    eventType,
 		CallerID:     cfg.CallerID,
+		SessionID:    cfg.SessionID,
 		OutputHash:   outputHash,
 		HookdTraceID: cfg.HookdTraceID,
 		Allowed:      true,
@@ -126,6 +129,7 @@ func buildPostCallEntry(store AuditStore, preEntry ChainEntry, resp *anthropic.M
 		Hash:         internal.Hash,
 		EventType:    internal.EventType,
 		CallerID:     internal.CallerID,
+		SessionID:    internal.SessionID,
 		OutputHash:   internal.OutputHash,
 		HookdTraceID: internal.HookdTraceID,
 		Allowed:      internal.Allowed,
@@ -152,6 +156,7 @@ func buildStreamCompleteEntry(store AuditStore, startEntry ChainEntry, streamErr
 		PrevHash:     prev,
 		EventType:    eventType,
 		CallerID:     cfg.CallerID,
+		SessionID:    cfg.SessionID,
 		HookdTraceID: cfg.HookdTraceID,
 		Allowed:      true,
 		Timestamp:    ts.Format(time.RFC3339Nano),
@@ -170,6 +175,7 @@ func buildStreamCompleteEntry(store AuditStore, startEntry ChainEntry, streamErr
 		Hash:         internal.Hash,
 		EventType:    internal.EventType,
 		CallerID:     internal.CallerID,
+		SessionID:    internal.SessionID,
 		HookdTraceID: internal.HookdTraceID,
 		Allowed:      internal.Allowed,
 		Timestamp:    ts,
@@ -222,6 +228,7 @@ func computeEntryHash(store AuditStore, entry ChainEntry) (ChainEntry, error) {
 		ActionType:   entry.ActionType,
 		Actor:        entry.Actor,
 		CallerID:     entry.CallerID,
+		SessionID:    entry.SessionID,
 		InputHash:    entry.InputHash,
 		OutputHash:   entry.OutputHash,
 		Result:       entry.Result,
@@ -278,6 +285,7 @@ func findLastValidHash(entries []ChainEntry) string {
 			ActionType:   e.ActionType,
 			Actor:        e.Actor,
 			CallerID:     e.CallerID,
+			SessionID:    e.SessionID,
 			InputHash:    e.InputHash,
 			OutputHash:   e.OutputHash,
 			Result:       e.Result,
@@ -330,6 +338,7 @@ func buildSegmentBoundaryEntry(lastValidHash, reason string) (ChainEntry, error)
 	}, nil
 }
 
+
 // verifyChain is the internal entry point for Verify().
 func verifyChain(entries []ChainEntry) error {
 	internalEntries := make([]inaudit.Entry, len(entries))
@@ -342,6 +351,7 @@ func verifyChain(entries []ChainEntry) error {
 			ActionType:   e.ActionType,
 			Actor:        e.Actor,
 			CallerID:     e.CallerID,
+			SessionID:    e.SessionID,
 			InputHash:    e.InputHash,
 			OutputHash:   e.OutputHash,
 			Result:       e.Result,
