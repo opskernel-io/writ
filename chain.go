@@ -32,6 +32,17 @@ func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID 
 	if event.HookdTraceID == "" {
 		event.HookdTraceID = hookdTraceID
 	}
+	if event.EventType == "" {
+		event.EventType = "tool_use"
+	}
+	actor := string(event.Actor)
+	if actor == "" {
+		actor = "agent"
+	}
+	result := event.Result
+	if result == "" {
+		result = "success"
+	}
 
 	id := newAuditID()
 	internal := inaudit.Entry{
@@ -39,9 +50,11 @@ func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID 
 		PrevHash:     prev,
 		EventType:    event.EventType,
 		ActionType:   event.ActionType,
+		Actor:        actor,
 		CallerID:     event.CallerID,
 		InputHash:    event.InputHash,
 		OutputHash:   event.OutputHash,
+		Result:       result,
 		HookdTraceID: event.HookdTraceID,
 		Allowed:      true,
 		Timestamp:    ts.Format(time.RFC3339Nano),
@@ -60,9 +73,11 @@ func buildChainEntry(store AuditStore, event AuditEvent, callerID, hookdTraceID 
 		Hash:         internal.Hash,
 		EventType:    internal.EventType,
 		ActionType:   internal.ActionType,
+		Actor:        internal.Actor,
 		CallerID:     internal.CallerID,
 		InputHash:    internal.InputHash,
 		OutputHash:   internal.OutputHash,
+		Result:       internal.Result,
 		HookdTraceID: internal.HookdTraceID,
 		Allowed:      internal.Allowed,
 		Timestamp:    ts,
@@ -195,9 +210,11 @@ func verifyChain(entries []ChainEntry) error {
 			Hash:         e.Hash,
 			EventType:    e.EventType,
 			ActionType:   e.ActionType,
+			Actor:        e.Actor,
 			CallerID:     e.CallerID,
 			InputHash:    e.InputHash,
 			OutputHash:   e.OutputHash,
+			Result:       e.Result,
 			HookdTraceID: e.HookdTraceID,
 			Allowed:      e.Allowed,
 			DenialReason: e.DenialReason,

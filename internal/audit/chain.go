@@ -19,9 +19,11 @@ type Entry struct {
 	Hash         string            `json:"hash"`
 	EventType    string            `json:"event_type"`
 	ActionType   string            `json:"action_type,omitempty"`
+	Actor        string            `json:"actor,omitempty"`
 	CallerID     string            `json:"caller_id,omitempty"`
 	InputHash    string            `json:"input_hash,omitempty"`
 	OutputHash   string            `json:"output_hash,omitempty"`
+	Result       string            `json:"result,omitempty"`
 	HookdTraceID string            `json:"hookd_trace_id,omitempty"`
 	Allowed      bool              `json:"allowed"`
 	DenialReason string            `json:"denial_reason,omitempty"`
@@ -36,9 +38,11 @@ type HashContent struct {
 	PrevHash     string `json:"prev_hash"`
 	EventType    string `json:"event_type"`
 	ActionType   string `json:"action_type,omitempty"`
+	Actor        string `json:"actor,omitempty"`
 	CallerID     string `json:"caller_id,omitempty"`
 	InputHash    string `json:"input_hash,omitempty"`
 	OutputHash   string `json:"output_hash,omitempty"`
+	Result       string `json:"result,omitempty"`
 	HookdTraceID string `json:"hookd_trace_id,omitempty"`
 	Allowed      bool   `json:"allowed"`
 	DenialReason string `json:"denial_reason,omitempty"`

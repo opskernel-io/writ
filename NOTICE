@@ -1,0 +1,32 @@
+writ-core
+Copyright 2026 Will Wismit
+
+This product is licensed under the Apache License, Version 2.0.
+See LICENSE for the full license text.
+
+---
+
+This product includes code derived from an internal production system
+(opskern-agent, proprietary to Will Wismit / OpsKern). The extraction
+source files (core/audit.py, core/codification_gate.py, core/policy.py)
+use only Python standard library modules and internal helpers — no
+third-party libraries are carried forward into this Go SDK.
+
+Dependency license audit performed 2026-05-04:
+- Extraction-relevant Python files: stdlib only (fcntl, hashlib, hmac,
+  json, logging, os, threading, datetime, pathlib). Clean.
+- The opskern-agent requirements.txt includes fpdf2 (LGPL-3.0), but that
+  module is used only for PDF report generation and is NOT part of any
+  code extracted into writ-core.
+
+---
+
+Third-party Go dependencies (see go.mod for full list):
+
+github.com/anthropics/anthropic-sdk-go — MIT License
+github.com/open-policy-agent/opa — Apache License 2.0
+github.com/digitorus/timestamp — MIT License
+github.com/google/uuid — BSD 3-Clause License
+
+For the complete list of transitive dependencies and their licenses,
+run: go mod download && go list -m -json all

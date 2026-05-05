@@ -128,24 +128,49 @@ type Decision struct {
 	AuditID      string
 }
 
+// Actor classifies who triggered an audit event.
+type Actor string
+
+const (
+	ActorAgent     Actor = "agent"     // autonomous agent action
+	ActorHuman     Actor = "human"     // human-in-the-loop action
+	ActorAutomated Actor = "automated" // scheduled / non-interactive automation
+)
+
 // AuditEvent is a structured event written to the Merkle chain.
-// Used by writ.Audit() for explicit tool use logging.
+// Used by writ.Audit() for explicit tool use events (file read, shell exec,
+// web fetch, etc.) that require Article 12 granularity.
+//
+// Article 12 mapping:
+//   - Who:    CallerID + Actor
+//   - What:   ActionType + InputHash
+//   - When:   Timestamp
+//   - Result: Result (success/failure/error)
+//   - Chain:  Merkle link computed automatically from previous entry
 type AuditEvent struct {
 	// EventType classifies the event (e.g. "llm_call", "tool_use", "denial").
+	// Defaults to "tool_use" if empty.
 	EventType string
-	// ActionType is the agent-defined action label (e.g. "read_file", "web_search").
+	// ActionType is the agent-defined action label (e.g. "read_file", "shell_exec",
+	// "web_fetch", "write_file", "list_dir"). Required for Article 12 granularity.
 	ActionType string
+	// Actor classifies who triggered the action. Defaults to ActorAgent.
+	Actor Actor
 	// CallerID is the agent process identifier.
 	CallerID string
-	// InputHash is the SHA-256 hex hash of the input content.
+	// InputHash is the SHA-256 hex hash of the input content (path, command, URL).
+	// Use audit.HashBytes([]byte(input)) to compute.
 	InputHash string
-	// OutputHash is the SHA-256 hex hash of the output content. Empty for denials.
+	// OutputHash is the SHA-256 hex hash of the output (file contents, stdout, response).
+	// Empty for failed or denied actions.
 	OutputHash string
+	// Result records the outcome: "success", "failure", "denied", "error".
+	Result string
 	// HookdTraceID cross-references the hookd event envelope (ADR #13).
 	HookdTraceID string
-	// Timestamp is the event time in UTC.
+	// Timestamp is the event time in UTC. Defaults to time.Now().UTC() if zero.
 	Timestamp time.Time
-	// Metadata holds arbitrary key-value pairs for extra context.
+	// Metadata holds arbitrary key-value pairs for extra context (max 200 chars per value).
 	Metadata map[string]string
 }
 
