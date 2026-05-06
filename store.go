@@ -99,6 +99,16 @@ func (s *jsonlStore) Verify() error {
 	return verifyChain(entries)
 }
 
+// ReadChainFile reads all entries from a JSONL chain file.
+// Exported for testing and verification tooling.
+func ReadChainFile(path string) ([]ChainEntry, error) {
+	store, err := newJSONLStore(path)
+	if err != nil {
+		return nil, err
+	}
+	return store.ReadAll()
+}
+
 // memoryStore is an in-memory AuditStore for testing.
 type memoryStore struct {
 	mu      sync.Mutex
