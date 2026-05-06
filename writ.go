@@ -53,6 +53,13 @@ type Config struct {
 	// that writes to this chain. Nil or empty allows any CallerID.
 	// writ.New returns an error if CallerID is not in the list when it is set.
 	AllowedCallers []string
+
+	// SessionID is a stable identifier for the current process run
+	// (e.g. a UUID generated at startup). Written into each chain entry.
+	// On writ.New(), if the chain's last entry has a different non-empty
+	// SessionID, a warning is added to Client.Warnings() to flag the
+	// cross-session boundary for human review.
+	SessionID string
 }
 
 // ErrCorruptChain is returned by New() when the existing chain fails Merkle
@@ -67,6 +74,7 @@ type Client struct {
 	cfg      Config
 	gater    *gateWrapper
 	chain    AuditStore
+	warnings []string // non-fatal init warnings (e.g. session ID mismatch)
 }
 
 // New constructs a writ.Client with lazy OPA policy reload.
@@ -126,6 +134,20 @@ func NewWithContext(ctx context.Context, cfg Config) (*Client, error) {
 		chain: store,
 	}
 	c.Messages = &MessagesService{wc: c}
+
+	// Warn on session ID mismatch so operators know the chain crosses a restart.
+	if cfg.SessionID != "" {
+		if entries, readErr := store.ReadAll(); readErr == nil && len(entries) > 0 {
+			last := entries[len(entries)-1]
+			if last.SessionID != "" && last.SessionID != cfg.SessionID {
+				c.warnings = append(c.warnings, fmt.Sprintf(
+					"session ID mismatch: last chain entry has session_id=%q, current session is %q — chain spans a process restart",
+					last.SessionID, cfg.SessionID,
+				))
+			}
+		}
+	}
+
 	return c, nil
 }
 
@@ -206,6 +228,76 @@ type AuditEvent struct {
 	Metadata map[string]string
 }
 
+// Warnings returns non-fatal issues detected at construction time.
+// Currently populated when Config.SessionID differs from the last chain
+// entry's session_id, indicating the chain spans a process restart.
+func (c *Client) Warnings() []string {
+	return c.warnings
+}
+
+// VerifyResult is the output of Client.VerifyFull.
+type VerifyResult struct {
+	Valid        bool
+	EntryCount   int
+	FirstBreak   *ChainEntry // nil if Valid is true
+	RootHash     string      // hash of the last entry; empty if chain is empty
+	SessionGaps  []SessionGap
+}
+
+// SessionGap describes a point in the chain where the session_id changed,
+// indicating a process restart boundary.
+type SessionGap struct {
+	AfterEntryIndex int    // index of the last entry with PrevSessionID
+	PrevSessionID   string
+	NextSessionID   string
+}
+
+// VerifyFull verifies Merkle hash integrity and reports SessionID gaps.
+// Unlike the package-level Verify, this returns structured results including
+// chain continuity information across process restarts.
+func (c *Client) VerifyFull() (*VerifyResult, error) {
+	entries, err := c.chain.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("writ.VerifyFull: read chain: %w", err)
+	}
+	result := &VerifyResult{EntryCount: len(entries)}
+	if err := verifyChain(entries); err != nil {
+		result.Valid = false
+		result.FirstBreak = firstBrokenEntry(entries)
+	} else {
+		result.Valid = true
+		if len(entries) > 0 {
+			result.RootHash = entries[len(entries)-1].Hash
+		}
+	}
+	for i := 1; i < len(entries); i++ {
+		prev, curr := entries[i-1], entries[i]
+		if prev.SessionID != "" && curr.SessionID != "" && curr.SessionID != prev.SessionID {
+			result.SessionGaps = append(result.SessionGaps, SessionGap{
+				AfterEntryIndex: i - 1,
+				PrevSessionID:   prev.SessionID,
+				NextSessionID:   curr.SessionID,
+			})
+		}
+	}
+	return result, nil
+}
+
+// firstBrokenEntry returns the first ChainEntry whose hash link is broken,
+// or nil if the chain is intact.
+func firstBrokenEntry(entries []ChainEntry) *ChainEntry {
+	for i := range entries {
+		copy := entries[i]
+		if i == len(entries)-1 {
+			return &copy
+		}
+		if entries[i+1].PrevHash != entries[i].Hash {
+			return &copy
+		}
+	}
+	return nil
+}
+
 // Audit writes an explicit event to the writ chain. Use for tool use events
 // (file read, shell exec, web fetch) that require Article 12 granularity.
 // The chain entry includes a Merkle link to the previous entry.
@@ -213,7 +305,7 @@ func (c *Client) Audit(event AuditEvent) error {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
 	}
-	entry, err := buildChainEntry(c.chain, event, c.cfg.CallerID, c.cfg.HookdTraceID)
+	entry, err := buildChainEntry(c.chain, event, c.cfg.CallerID, c.cfg.HookdTraceID, c.cfg.SessionID)
 	if err != nil {
 		return fmt.Errorf("writ.Audit: build entry: %w", err)
 	}

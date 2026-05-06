@@ -21,6 +21,7 @@ type Entry struct {
 	ActionType   string            `json:"action_type,omitempty"`
 	Actor        string            `json:"actor,omitempty"`
 	CallerID     string            `json:"caller_id,omitempty"`
+	SessionID    string            `json:"session_id,omitempty"`
 	InputHash    string            `json:"input_hash,omitempty"`
 	OutputHash   string            `json:"output_hash,omitempty"`
 	Result       string            `json:"result,omitempty"`
@@ -34,12 +35,15 @@ type Entry struct {
 
 // HashContent is the subset of fields included in the Merkle hash.
 // Excludes Hash itself (computed from this) and Metadata (advisory).
+// SessionID uses omitempty so pre-v0.2 entries (without session_id) remain
+// verifiable — an absent field hashes identically to an absent JSON key.
 type HashContent struct {
 	PrevHash     string `json:"prev_hash"`
 	EventType    string `json:"event_type"`
 	ActionType   string `json:"action_type,omitempty"`
 	Actor        string `json:"actor,omitempty"`
 	CallerID     string `json:"caller_id,omitempty"`
+	SessionID    string `json:"session_id,omitempty"`
 	InputHash    string `json:"input_hash,omitempty"`
 	OutputHash   string `json:"output_hash,omitempty"`
 	Result       string `json:"result,omitempty"`
@@ -56,6 +60,7 @@ func ComputeHash(e Entry) (string, error) {
 		EventType:    e.EventType,
 		ActionType:   e.ActionType,
 		CallerID:     e.CallerID,
+		SessionID:    e.SessionID,
 		InputHash:    e.InputHash,
 		OutputHash:   e.OutputHash,
 		HookdTraceID: e.HookdTraceID,
