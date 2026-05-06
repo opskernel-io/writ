@@ -2,6 +2,7 @@ package writ
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -47,6 +48,21 @@ func (s *MessagesService) New(ctx context.Context, params anthropic.MessageNewPa
 		_ = s.wc.chain.Append(postEntry)
 	}
 
+	if s.wc.payloads != nil {
+		inputJSON, _ := json.Marshal(params)
+		var outputJSON json.RawMessage
+		if resp != nil {
+			outputJSON, _ = json.Marshal(resp)
+		}
+		s.wc.payloads.write(payloadEntry{
+			AuditID:   entry.ID,
+			Timestamp: entry.Timestamp.(time.Time),
+			EventType: entry.EventType,
+			Input:     inputJSON,
+			Output:    outputJSON,
+		})
+	}
+
 	return resp, callErr
 }
 
@@ -76,6 +92,16 @@ func (s *MessagesService) NewStreaming(ctx context.Context, params anthropic.Mes
 			AuditID: decision.AuditID,
 			Tier:    decision.Tier,
 		}
+	}
+
+	if s.wc.payloads != nil {
+		inputJSON, _ := json.Marshal(params)
+		s.wc.payloads.write(payloadEntry{
+			AuditID:   entry.ID,
+			Timestamp: entry.Timestamp.(time.Time),
+			EventType: entry.EventType,
+			Input:     inputJSON,
+		})
 	}
 
 	inner := s.wc.inner.Messages.NewStreaming(ctx, params)

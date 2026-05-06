@@ -1,6 +1,8 @@
 package writ_test
 
 import (
+	"bufio"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -239,5 +241,87 @@ func TestVerifyFullNoGapsForSingleSession(t *testing.T) {
 	}
 	if len(result.SessionGaps) != 0 {
 		t.Errorf("want no gaps for single session, got: %v", result.SessionGaps)
+	}
+}
+
+// PR 3: StoreFullInputs tests.
+
+func TestStoreFullInputsCreatesPayloadsFile(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.StoreFullInputs = true
+	c, err := writ.New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	wantPath := cfg.AuditPath + ".payloads"
+	if c.PayloadsPath() != wantPath {
+		t.Fatalf("want PayloadsPath=%q, got %q", wantPath, c.PayloadsPath())
+	}
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("payloads file not created: %v", err)
+	}
+	fi, err := os.Stat(wantPath)
+	if err != nil {
+		t.Fatalf("stat payloads file: %v", err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("want payloads file mode 0600, got %#o", fi.Mode().Perm())
+	}
+}
+
+func TestStoreFullInputsDisabledNoFile(t *testing.T) {
+	cfg := testConfig(t)
+	// StoreFullInputs defaults to false.
+	c, err := writ.New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if c.PayloadsPath() != "" {
+		t.Errorf("want empty PayloadsPath when StoreFullInputs=false, got %q", c.PayloadsPath())
+	}
+	if _, err := os.Stat(cfg.AuditPath + ".payloads"); !os.IsNotExist(err) {
+		t.Error("want no payloads file when StoreFullInputs=false")
+	}
+}
+
+func TestStoreFullInputsAuditWritesPayload(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.StoreFullInputs = true
+	c, err := writ.New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := c.Audit(writ.AuditEvent{
+		EventType:  "tool_use",
+		ActionType: "read_file",
+		Metadata:   map[string]string{"path": "/etc/passwd", "reason": "audit test"},
+	}); err != nil {
+		t.Fatalf("Audit: %v", err)
+	}
+
+	f, err := os.Open(c.PayloadsPath())
+	if err != nil {
+		t.Fatalf("open payloads file: %v", err)
+	}
+	defer f.Close()
+
+	var entries []map[string]json.RawMessage
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var e map[string]json.RawMessage
+		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			t.Fatalf("unmarshal payload entry: %v", err)
+		}
+		entries = append(entries, e)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("want 1 payload entry, got %d", len(entries))
+	}
+	if _, ok := entries[0]["audit_id"]; !ok {
+		t.Error("payload entry missing audit_id")
+	}
+	if _, ok := entries[0]["input"]; !ok {
+		t.Error("payload entry missing input")
 	}
 }

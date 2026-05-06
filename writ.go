@@ -7,6 +7,7 @@ package writ
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -60,6 +61,13 @@ type Config struct {
 	// SessionID, a warning is added to Client.Warnings() to flag the
 	// cross-session boundary for human review.
 	SessionID string
+
+	// StoreFullInputs enables writing raw input/output JSON to a sidecar
+	// file at AuditPath+".payloads". Opt-in; requires AuditPath to be set.
+	// When false (default), only input/output hashes are recorded in the
+	// main chain. Enable this when Article 12 auditors need to replay
+	// exactly what the agent sent and received.
+	StoreFullInputs bool
 }
 
 // ErrCorruptChain is returned by New() when the existing chain fails Merkle
@@ -74,7 +82,8 @@ type Client struct {
 	cfg      Config
 	gater    *gateWrapper
 	chain    AuditStore
-	warnings []string // non-fatal init warnings (e.g. session ID mismatch)
+	warnings []string      // non-fatal init warnings (e.g. session ID mismatch)
+	payloads *payloadWriter // nil when StoreFullInputs is false
 }
 
 // New constructs a writ.Client with lazy OPA policy reload.
@@ -126,12 +135,22 @@ func NewWithContext(ctx context.Context, cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("writ: init gate: %w", err)
 	}
 
+	var pw *payloadWriter
+	if cfg.StoreFullInputs && cfg.AuditPath != "" {
+		var pwErr error
+		pw, pwErr = newPayloadWriter(cfg.AuditPath)
+		if pwErr != nil {
+			return nil, fmt.Errorf("writ: init payload writer: %w", pwErr)
+		}
+	}
+
 	inner := anthropic.NewClient()
 	c := &Client{
-		inner: &inner,
-		cfg:   cfg,
-		gater: g,
-		chain: store,
+		inner:    &inner,
+		cfg:      cfg,
+		gater:    g,
+		chain:    store,
+		payloads: pw,
 	}
 	c.Messages = &MessagesService{wc: c}
 
@@ -149,6 +168,15 @@ func NewWithContext(ctx context.Context, cfg Config) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+// PayloadsPath returns the path of the sidecar payloads file, or empty string
+// if StoreFullInputs is disabled or AuditPath was not set.
+func (c *Client) PayloadsPath() string {
+	if c.payloads == nil {
+		return ""
+	}
+	return c.payloads.path
 }
 
 // DenialError is returned by Messages.New and Messages.NewStreaming when the
@@ -301,6 +329,8 @@ func firstBrokenEntry(entries []ChainEntry) *ChainEntry {
 // Audit writes an explicit event to the writ chain. Use for tool use events
 // (file read, shell exec, web fetch) that require Article 12 granularity.
 // The chain entry includes a Merkle link to the previous entry.
+// When StoreFullInputs is enabled and event.Metadata is non-empty, the
+// metadata is also written to the sidecar payloads file.
 func (c *Client) Audit(event AuditEvent) error {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
@@ -309,7 +339,20 @@ func (c *Client) Audit(event AuditEvent) error {
 	if err != nil {
 		return fmt.Errorf("writ.Audit: build entry: %w", err)
 	}
-	return c.chain.Append(entry)
+	if appendErr := c.chain.Append(entry); appendErr != nil {
+		return appendErr
+	}
+	if c.payloads != nil && len(event.Metadata) > 0 {
+		if metaJSON, jsonErr := json.Marshal(event.Metadata); jsonErr == nil {
+			c.payloads.write(payloadEntry{
+				AuditID:   entry.ID,
+				Timestamp: event.Timestamp,
+				EventType: entry.EventType,
+				Input:     metaJSON,
+			})
+		}
+	}
+	return nil
 }
 
 // ChainProtected attempts to set the FS_APPEND_FL attribute (equivalent to
