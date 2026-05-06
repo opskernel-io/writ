@@ -24,6 +24,10 @@ func (s *MessagesService) New(ctx context.Context, params anthropic.MessageNewPa
 	}
 
 	entry.Timestamp = time.Now().UTC()
+	entry, err = computeEntryHash(s.wc.chain, entry)
+	if err != nil {
+		return nil, fmt.Errorf("writ: hash pre-call audit entry: %w", err)
+	}
 	if err := s.wc.chain.Append(entry); err != nil {
 		return nil, fmt.Errorf("writ: write pre-call audit entry: %w", err)
 	}
@@ -58,6 +62,10 @@ func (s *MessagesService) NewStreaming(ctx context.Context, params anthropic.Mes
 
 	entry.EventType = "llm_call_streaming_started"
 	entry.Timestamp = time.Now().UTC()
+	entry, err = computeEntryHash(s.wc.chain, entry)
+	if err != nil {
+		return nil, fmt.Errorf("writ: hash streaming-started audit entry: %w", err)
+	}
 	if err := s.wc.chain.Append(entry); err != nil {
 		return nil, fmt.Errorf("writ: write streaming-started audit entry: %w", err)
 	}

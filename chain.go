@@ -184,26 +184,64 @@ func lastHash(store AuditStore) (string, error) {
 	}
 	internalEntries := make([]inaudit.Entry, len(entries))
 	for i, e := range entries {
-		ts := ""
-		if t, ok := e.Timestamp.(time.Time); ok {
-			ts = t.Format(time.RFC3339Nano)
-		}
 		internalEntries[i] = inaudit.Entry{
 			Hash:      e.Hash,
-			Timestamp: ts,
+			Timestamp: timestampString(e.Timestamp),
 		}
 	}
 	return inaudit.PrevHashFor(internalEntries), nil
+}
+
+// timestampString normalises a ChainEntry.Timestamp (interface{}) to the RFC3339Nano
+// string used in Merkle hash computation. Handles both time.Time (in-memory path) and
+// string (JSONL read-back path).
+func timestampString(v interface{}) string {
+	switch t := v.(type) {
+	case time.Time:
+		return t.Format(time.RFC3339Nano)
+	case string:
+		return t
+	default:
+		return ""
+	}
+}
+
+// computeEntryHash sets PrevHash to the last chain hash and computes the Merkle
+// hash for entry. Must be called on gate decision entries before Append, since
+// those are constructed without hash fields by the gate evaluator.
+func computeEntryHash(store AuditStore, entry ChainEntry) (ChainEntry, error) {
+	prevHash, err := lastHash(store)
+	if err != nil {
+		return ChainEntry{}, fmt.Errorf("read prev hash: %w", err)
+	}
+	entry.PrevHash = prevHash
+
+	internal := inaudit.Entry{
+		PrevHash:     entry.PrevHash,
+		EventType:    entry.EventType,
+		ActionType:   entry.ActionType,
+		Actor:        entry.Actor,
+		CallerID:     entry.CallerID,
+		InputHash:    entry.InputHash,
+		OutputHash:   entry.OutputHash,
+		Result:       entry.Result,
+		HookdTraceID: entry.HookdTraceID,
+		Allowed:      entry.Allowed,
+		DenialReason: entry.DenialReason,
+		Timestamp:    timestampString(entry.Timestamp),
+	}
+	hash, err := inaudit.ComputeHash(internal)
+	if err != nil {
+		return ChainEntry{}, fmt.Errorf("compute entry hash: %w", err)
+	}
+	entry.Hash = hash
+	return entry, nil
 }
 
 // verifyChain is the internal entry point for Verify().
 func verifyChain(entries []ChainEntry) error {
 	internalEntries := make([]inaudit.Entry, len(entries))
 	for i, e := range entries {
-		ts := ""
-		if t, ok := e.Timestamp.(time.Time); ok {
-			ts = t.Format(time.RFC3339Nano)
-		}
 		internalEntries[i] = inaudit.Entry{
 			ID:           e.ID,
 			PrevHash:     e.PrevHash,
@@ -218,7 +256,7 @@ func verifyChain(entries []ChainEntry) error {
 			HookdTraceID: e.HookdTraceID,
 			Allowed:      e.Allowed,
 			DenialReason: e.DenialReason,
-			Timestamp:    ts,
+			Timestamp:    timestampString(e.Timestamp),
 		}
 	}
 	return inaudit.Verify(internalEntries)
