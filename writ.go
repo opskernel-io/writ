@@ -7,6 +7,7 @@ package writ
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,7 +43,16 @@ type Config struct {
 	// EagerReload enables a goroutine-based policy watcher.
 	// Default (false) uses lazy reload: policy is re-read when mtime changes.
 	EagerReload bool
+
+	// AllowCorruptChainRecovery, when true, permits New() to open a chain that
+	// fails Merkle verification. A ChainSegmentBoundary entry is written
+	// recording the recovery event. Default false: corrupt chain → ErrCorruptChain.
+	AllowCorruptChainRecovery bool
 }
+
+// ErrCorruptChain is returned by New() when the existing chain fails Merkle
+// verification and Config.AllowCorruptChainRecovery is false.
+var ErrCorruptChain = errors.New("writ: existing chain fails Merkle verification")
 
 // Client wraps an anthropic.Client with a pre-call codification gate and
 // post-call Merkle audit chain write. Construct with writ.New().
@@ -79,6 +89,10 @@ func NewWithContext(ctx context.Context, cfg Config) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("writ: open audit store: %w", err)
 		}
+	}
+
+	if err := openChainVerify(store, cfg); err != nil {
+		return nil, err
 	}
 
 	g, err := newGate(ctx, cfg.PolicyPath, cfg.EagerReload)

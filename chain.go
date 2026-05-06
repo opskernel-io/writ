@@ -238,6 +238,98 @@ func computeEntryHash(store AuditStore, entry ChainEntry) (ChainEntry, error) {
 	return entry, nil
 }
 
+// openChainVerify verifies the existing chain on New(). If the chain is corrupt
+// and AllowCorruptChainRecovery is false, it returns ErrCorruptChain.
+// If recovery is allowed, it writes a ChainSegmentBoundary entry and proceeds.
+func openChainVerify(store AuditStore, cfg Config) error {
+	entries, err := store.ReadAll()
+	if err != nil {
+		return fmt.Errorf("writ: read chain for verification: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	verifyErr := verifyChain(entries)
+	if verifyErr == nil {
+		return nil
+	}
+	if !cfg.AllowCorruptChainRecovery {
+		return fmt.Errorf("%w: %v", ErrCorruptChain, verifyErr)
+	}
+	lastValid := findLastValidHash(entries)
+	reason := fmt.Sprintf("recovery at %s: %v", time.Now().UTC().Format(time.RFC3339), verifyErr)
+	boundary, err := buildSegmentBoundaryEntry(lastValid, reason)
+	if err != nil {
+		return fmt.Errorf("writ: build recovery boundary: %w", err)
+	}
+	return store.Append(boundary)
+}
+
+// findLastValidHash walks entries and returns the hash of the last entry that
+// verifies correctly, or the genesis hash if none verify.
+func findLastValidHash(entries []ChainEntry) string {
+	prevHash := inaudit.PrevHashFor(nil)
+	for _, e := range entries {
+		ie := inaudit.Entry{
+			ID:           e.ID,
+			PrevHash:     e.PrevHash,
+			Hash:         e.Hash,
+			EventType:    e.EventType,
+			ActionType:   e.ActionType,
+			Actor:        e.Actor,
+			CallerID:     e.CallerID,
+			InputHash:    e.InputHash,
+			OutputHash:   e.OutputHash,
+			Result:       e.Result,
+			HookdTraceID: e.HookdTraceID,
+			Allowed:      e.Allowed,
+			DenialReason: e.DenialReason,
+			Timestamp:    timestampString(e.Timestamp),
+		}
+		if ie.PrevHash != prevHash {
+			break
+		}
+		want, err := inaudit.ComputeHash(ie)
+		if err != nil || ie.Hash != want {
+			break
+		}
+		prevHash = ie.Hash
+	}
+	return prevHash
+}
+
+// buildSegmentBoundaryEntry creates a ChainSegmentBoundary entry that anchors
+// the start of a new chain segment after corruption recovery.
+func buildSegmentBoundaryEntry(lastValidHash, reason string) (ChainEntry, error) {
+	id := newAuditID()
+	ts := time.Now().UTC()
+
+	internal := inaudit.Entry{
+		ID:        id,
+		PrevHash:  lastValidHash,
+		EventType: "chain_segment_boundary",
+		Allowed:   true,
+		Timestamp: ts.Format(time.RFC3339Nano),
+		Metadata:  map[string]string{"type": "RECOVERY", "reason": reason},
+	}
+
+	hash, err := inaudit.ComputeHash(internal)
+	if err != nil {
+		return ChainEntry{}, fmt.Errorf("compute boundary hash: %w", err)
+	}
+	internal.Hash = hash
+
+	return ChainEntry{
+		ID:        internal.ID,
+		PrevHash:  internal.PrevHash,
+		Hash:      internal.Hash,
+		EventType: internal.EventType,
+		Allowed:   internal.Allowed,
+		Timestamp: ts,
+		Metadata:  internal.Metadata,
+	}, nil
+}
+
 // verifyChain is the internal entry point for Verify().
 func verifyChain(entries []ChainEntry) error {
 	internalEntries := make([]inaudit.Entry, len(entries))
