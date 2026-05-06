@@ -201,9 +201,11 @@ The writ-core SDK is Apache 2.0. Use it, fork it, embed it, build commercial pro
 
 ---
 
-## Early access
+## Early Access
 
-writ is pre-launch. To request early access or discuss Article 12 compliance requirements: [writ.opskernel.io](https://writ.opskernel.io) or reach out directly via [opskern.io](https://opskern.io).
+writ is pre-launch. If your team is evaluating AI audit trail tooling for EU AI Act compliance or similar regulatory requirements, open a [GitHub Discussion](https://github.com/opskernel-io/writ/discussions) to start a conversation.
+
+We're looking to work closely with 3–5 early adopters before the public launch.
 
 ---
 
