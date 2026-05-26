@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deterministic test fixture tokens used by D6 credential-rejection tests. These literals are committed on purpose to assert the endpoint blocks them; they are NEVER real credentials. Pinning fingerprints by commit SHA is brittle (every rebase/squash regenerates them, and shallow CI clones produce yet another synthetic SHA), so we allowlist by file path + literal pattern instead."
+paths = [
+  '''internal/http/knowledge_bridge_handler_test\.go''',
+  '''internal/http/knowledge_inbox_handler_test\.go''',
+]
+regexes = [
+  '''0011223344556677889900aabbccddeeff0011223344556677889900aabbccdd''',
+  '''abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890''',
+  '''wire-compat-test-key-\d+''',
+  '''AKIA1234567890ABCDEF''',
+]
+
+# BOOTSTRAP NOTE: copied from hookd-core template. Review rules for this project.
