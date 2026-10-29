@@ -1,0 +1,13 @@
+# Compound Engineering -- repo config (CE program stage 3, written by ce-bootstrap-repo.sh)
+# Plan: ~/.claude/plans/ce-program/PLAN.md
+docs_root: docs/ce
+cross_model_review_mode: off
+plan_model: fable
+brainstorm_model: fable
+plan_skip_scoping_confirm: true
+packs:
+  - source: ~/ai-wiki/compound-packs/floor-decisions
+  - source: ~/ai-wiki/compound-packs/claude-rules
+  - source: ~/ai-wiki/compound-packs/lessons
+  - source: ~/ai-wiki/compound-packs/hook-authoring
+  - source: ~/ai-wiki/compound-packs/officer-standards
