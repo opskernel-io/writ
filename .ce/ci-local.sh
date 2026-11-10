@@ -3,10 +3,20 @@
 # this repo's CI workflows run, so a push that CI would reject is refused locally by the pre-push hook.
 # Regenerate: ce-bootstrap-repo.sh --apply-all. Tools CI gets from an action (gosec, govulncheck) or that may be
 # absent here (shellcheck, gitleaks) are reported "not checked" when missing; every other tool is required.
-cd "$(git rev-parse --show-toplevel)" || exit 2
+PATHS=()
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2   # the repo this script lives in, whatever the caller cwd
 fail=0
+# CI runs on push only when a changed file matches PATHS (empty = every push). The pre-push hook passes the pushed
+# files in CE_CI_PUSH_FILES; with no match, CI would not run, so neither do we. Unset = run everything.
+if [ -n "${CE_CI_PUSH_FILES:-}" ] && [ -f "$CE_CI_PUSH_FILES" ] && [ "${#PATHS[@]}" -gt 0 ]; then
+  hit=0
+  while IFS= read -r f; do for g in "${PATHS[@]}"; do case "$f" in $g) hit=1;; esac; done; done < "$CE_CI_PUSH_FILES"
+  [ "$hit" -eq 1 ] || { echo "ci-local: CI would not run for this push (no changed file matches its path filters); skipped"; exit 0; }
+fi
 step() {  # level command
-  local lvl=$1 cmd=$2 bin=${2%% *}
+  local lvl=$1 cmd=$2 rest=$2 bin
+  while [[ $rest =~ ^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+(.*)$ ]]; do rest=${BASH_REMATCH[1]}; done
+  bin=${rest%% *}
   if ! command -v "$bin" >/dev/null 2>&1; then
     if [ "$lvl" = optional ]; then echo "ci-local: NOT CHECKED (no $bin here): $cmd"; return; fi
     echo "ci-local: FAIL, required tool '$bin' is not installed: $cmd"; fail=1; return
