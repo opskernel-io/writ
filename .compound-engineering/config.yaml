@@ -1,4 +1,5 @@
-# Compound Engineering -- repo config (CE program stage 3, written by ce-bootstrap-repo.sh)
+---
+# Compound Engineering repo config (CE stage 3), written by ce-bootstrap-repo.sh
 # Plan: ~/.claude/plans/ce-program/PLAN.md
 docs_root: docs/ce
 cross_model_review_mode: off
